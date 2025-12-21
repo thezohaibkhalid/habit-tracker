@@ -5,12 +5,13 @@ import { getDb } from "@/lib/mongodb"
 import { collections } from "@/lib/db-utils"
 import { ObjectId } from "mongodb"
 import type { Prayer, Todo } from "@/lib/models"
-import { subDays, format, startOfWeek, endOfWeek } from "date-fns"
+import { subDays, startOfWeek, endOfWeek } from "date-fns"
+import { getPakistanTime, getPakistanDateString, formatPakistanDate } from "@/lib/time-utils"
 
 export interface ActivityData {
   date: string
   count: number
-  level: 0 | 1 | 2 | 3 | 4
+  level: 0 | 1 | 2 | 3 | 4 | 5
 }
 
 export async function getActivityData(userIdParam?: string): Promise<ActivityData[]> {
@@ -25,18 +26,19 @@ export async function getActivityData(userIdParam?: string): Promise<ActivityDat
     userId = new ObjectId(user._id)
   }
 
-  // Get prayers for the past year (365 days)
-  const oneYearAgo = format(subDays(new Date(), 365), "yyyy-MM-dd")
-  const prayers = await db
+  const oneYearAgoDate = subDays(getPakistanTime(), 365)
+  const oneYearAgoStr = getPakistanDateString(oneYearAgoDate)
+  
+  const allPrayers = await db
     .collection<Prayer>(collections.prayers)
-    .find({
-      userId,
-      date: { $gte: oneYearAgo },
-    })
+    .find({ userId })
     .toArray()
-
-  // Get completed todos from the past year
-  const oneYearAgoDate = subDays(new Date(), 365)
+    
+  const prayers = allPrayers.filter((prayer) => {
+    if (!prayer.date) return false
+    return prayer.date >= oneYearAgoStr
+  })
+  
   const todos = await db
     .collection<Todo>(collections.todos)
     .find({
@@ -46,45 +48,87 @@ export async function getActivityData(userIdParam?: string): Promise<ActivityDat
     })
     .toArray()
 
-  // Combine activities by date
   const activityMap = new Map<string, number>()
 
-  // Add prayers (each completed prayer counts as 1 activity)
   prayers.forEach((prayer) => {
-    if (prayer.completedCount > 0) {
-      activityMap.set(prayer.date, (activityMap.get(prayer.date) || 0) + prayer.completedCount)
+    if (!prayer.date) return
+    
+    const prayerDate = String(prayer.date).trim()
+    
+    let count = 0
+    
+    if (prayer.completedCount && prayer.completedCount > 0) {
+      count = prayer.completedCount
+    } else if (prayer.prayers) {
+      count = Object.values(prayer.prayers).filter(Boolean).length
+    } else if (prayer.points && prayer.points > 0) {
+      count = Math.floor(prayer.points / 10)
+    }
+    
+    if (count > 0) {
+      const currentCount = activityMap.get(prayerDate) || 0
+      activityMap.set(prayerDate, currentCount + count)
     }
   })
 
-  // Add completed todos (each completed todo counts as 1 activity)
+  console.log("Activity Map Sample:", Array.from(activityMap.entries()).slice(0, 5))
+  console.log("Total prayers found:", prayers.length)
+  console.log("Prayer dates sample:", prayers.slice(0, 3).map(p => ({ date: p.date, count: p.completedCount, points: p.points })))
+
   todos.forEach((todo) => {
     if (todo.completedAt) {
-      const dateStr = format(new Date(todo.completedAt), "yyyy-MM-dd")
+      const todoDate = new Date(todo.completedAt)
+      const dateStr = getPakistanDateString(todoDate)
       activityMap.set(dateStr, (activityMap.get(dateStr) || 0) + 1)
     }
   })
 
-  // Fill all days in the past year and mark as active/inactive
-  const today = new Date()
-  const oneYearAgo = subDays(today, 365)
+  const today = getPakistanTime()
   const result: ActivityData[] = []
   
-  for (let d = new Date(oneYearAgo); d <= today; d.setDate(d.getDate() + 1)) {
-    const dateStr = format(d, "yyyy-MM-dd")
+  const startDateStr = oneYearAgoStr
+  const endDateStr = getPakistanDateString(today)
+  
+  const [startYear, startMonth, startDay] = startDateStr.split("-").map(Number)
+  const [endYear, endMonth, endDay] = endDateStr.split("-").map(Number)
+  
+  let currentYear = startYear
+  let currentMonth = startMonth
+  let currentDay = startDay
+  
+  while (
+    currentYear < endYear ||
+    (currentYear === endYear && currentMonth < endMonth) ||
+    (currentYear === endYear && currentMonth === endMonth && currentDay <= endDay)
+  ) {
+    const dateStr = `${currentYear}-${String(currentMonth).padStart(2, "0")}-${String(currentDay).padStart(2, "0")}`
     const count = activityMap.get(dateStr) || 0
     
-    // Calculate level based on count
-    // Level 0 = no activity (red), Level 1+ = has activity (green shades)
-    let level: 0 | 1 | 2 | 3 | 4 = 0
+    if (dateStr === "2025-12-21" || dateStr === "2024-12-20" || dateStr === "2025-12-20") {
+      console.log(`Checking date ${dateStr}: count=${count}, inMap=${activityMap.has(dateStr)}, mapKeys=${Array.from(activityMap.keys()).filter(k => k.includes("2025-12-21") || k.includes("2024-12-20") || k.includes("2025-12-20"))}`)
+    }
+    
+    let level: 0 | 1 | 2 | 3 | 4 | 5 = 0
     if (count > 0) {
-      // Any activity marks the day as active
-      if (count === 1) level = 1 // 1 activity
-      else if (count <= 3) level = 2 // 2-3 activities
-      else if (count <= 5) level = 3 // 4-5 activities
-      else level = 4 // 6+ activities
+      if (count === 1) level = 1
+      else if (count === 2) level = 2
+      else if (count === 3) level = 3
+      else if (count === 4) level = 4
+      else if (count >= 5) level = 5
     }
     
     result.push({ date: dateStr, count, level })
+    
+    currentDay++
+    const daysInMonth = new Date(currentYear, currentMonth, 0).getDate()
+    if (currentDay > daysInMonth) {
+      currentDay = 1
+      currentMonth++
+      if (currentMonth > 12) {
+        currentMonth = 1
+        currentYear++
+      }
+    }
   }
 
   return result
@@ -97,8 +141,7 @@ export async function getAnalytics() {
   const db = await getDb()
   const userId = new ObjectId(user._id)
 
-  // Get last 30 days of prayers
-  const thirtyDaysAgo = format(subDays(new Date(), 30), "yyyy-MM-dd")
+  const thirtyDaysAgo = getPakistanDateString(subDays(getPakistanTime(), 30))
   const prayers = await db
     .collection<Prayer>(collections.prayers)
     .find({
@@ -108,7 +151,6 @@ export async function getAnalytics() {
     .sort({ date: 1 })
     .toArray()
 
-  // Calculate prayer stats
   const prayersByDay = prayers.map((p) => ({
     date: p.date,
     count: p.completedCount,
@@ -118,19 +160,17 @@ export async function getAnalytics() {
   const possiblePrayers = prayers.length * 5
   const prayerCompletionRate = possiblePrayers > 0 ? Math.round((totalPrayers / possiblePrayers) * 100) : 0
 
-  // Get todos stats
   const allTodos = await db.collection<Todo>(collections.todos).find({ userId }).toArray()
 
   const completedTodos = allTodos.filter((t) => t.completed).length
   const totalTodos = allTodos.length
   const todoCompletionRate = totalTodos > 0 ? Math.round((completedTodos / totalTodos) * 100) : 0
 
-  // This week vs last week
-  const today = new Date()
-  const thisWeekStart = format(startOfWeek(today), "yyyy-MM-dd")
-  const thisWeekEnd = format(endOfWeek(today), "yyyy-MM-dd")
-  const lastWeekStart = format(startOfWeek(subDays(today, 7)), "yyyy-MM-dd")
-  const lastWeekEnd = format(endOfWeek(subDays(today, 7)), "yyyy-MM-dd")
+  const today = getPakistanTime()
+  const thisWeekStart = getPakistanDateString(startOfWeek(today))
+  const thisWeekEnd = getPakistanDateString(endOfWeek(today))
+  const lastWeekStart = getPakistanDateString(startOfWeek(subDays(today, 7)))
+  const lastWeekEnd = getPakistanDateString(endOfWeek(subDays(today, 7)))
 
   const thisWeekPrayers = await db
     .collection<Prayer>(collections.prayers)
@@ -152,7 +192,6 @@ export async function getAnalytics() {
   const lastWeekCount = lastWeekPrayers.reduce((sum, p) => sum + p.completedCount, 0)
   const weeklyTrend = lastWeekCount > 0 ? Math.round(((thisWeekCount - lastWeekCount) / lastWeekCount) * 100) : 0
 
-  // Points breakdown
   const prayerPoints = prayers.reduce((sum, p) => sum + p.points, 0)
   const todoPoints = allTodos.filter((t) => t.completed).reduce((sum, t) => sum + t.points, 0)
 
@@ -192,7 +231,6 @@ export async function getProgressData(startDate: string, endDate: string, userId
     userId = new ObjectId(user._id)
   }
 
-  // Get prayers in date range
   const prayers = await db
     .collection<Prayer>(collections.prayers)
     .find({
@@ -202,7 +240,6 @@ export async function getProgressData(startDate: string, endDate: string, userId
     .sort({ date: 1 })
     .toArray()
 
-  // Get completed todos in date range
   const todos = await db
     .collection<Todo>(collections.todos)
     .find({
@@ -216,10 +253,8 @@ export async function getProgressData(startDate: string, endDate: string, userId
     })
     .toArray()
 
-  // Create a map to aggregate data by date
   const progressMap = new Map<string, { prayers: number; todos: number; points: number }>()
 
-  // Add prayers
   prayers.forEach((prayer) => {
     const date = prayer.date
     const existing = progressMap.get(date) || { prayers: 0, todos: 0, points: 0 }
@@ -228,10 +263,9 @@ export async function getProgressData(startDate: string, endDate: string, userId
     progressMap.set(date, existing)
   })
 
-  // Add todos
   todos.forEach((todo) => {
     if (todo.completedAt) {
-      const date = format(new Date(todo.completedAt), "yyyy-MM-dd")
+      const date = formatPakistanDate(new Date(todo.completedAt), "yyyy-MM-dd")
       const existing = progressMap.get(date) || { prayers: 0, todos: 0, points: 0 }
       existing.todos += 1
       existing.points += todo.points
@@ -239,13 +273,12 @@ export async function getProgressData(startDate: string, endDate: string, userId
     }
   })
 
-  // Convert to array and fill missing dates
   const result: ProgressDataPoint[] = []
   const start = new Date(startDate)
   const end = new Date(endDate)
   
   for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const dateStr = format(d, "yyyy-MM-dd")
+    const dateStr = formatPakistanDate(d, "yyyy-MM-dd")
     const data = progressMap.get(dateStr) || { prayers: 0, todos: 0, points: 0 }
     result.push({
       date: dateStr,

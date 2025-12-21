@@ -19,7 +19,8 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subWeeks, subMonths } from "date-fns"
+import { subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from "date-fns"
+import { getPakistanTime, formatPakistanDate, getPakistanDateString } from "@/lib/time-utils"
 import { CalendarIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { ProgressDataPoint } from "@/app/actions/analytics"
@@ -35,16 +36,16 @@ type FilterType = "week" | "month" | "custom"
 export function ProgressCharts({ initialData }: ProgressChartsProps) {
   const [data, setData] = useState<ProgressDataPoint[]>(initialData)
   const [filterType, setFilterType] = useState<FilterType>("week")
-  const [startDate, setStartDate] = useState<Date>(startOfWeek(new Date()))
-  const [endDate, setEndDate] = useState<Date>(endOfWeek(new Date()))
+  const [startDate, setStartDate] = useState<Date>(startOfWeek(getPakistanTime()))
+  const [endDate, setEndDate] = useState<Date>(endOfWeek(getPakistanTime()))
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     async function fetchData() {
       setLoading(true)
       try {
-        const start = format(startDate, "yyyy-MM-dd")
-        const end = format(endDate, "yyyy-MM-dd")
+        const start = getPakistanDateString(startDate)
+        const end = getPakistanDateString(endDate)
         const response = await fetch(`/api/progress?start=${start}&end=${end}`)
         const newData = await response.json()
         setData(newData)
@@ -60,7 +61,7 @@ export function ProgressCharts({ initialData }: ProgressChartsProps) {
 
   const handleFilterChange = (value: FilterType) => {
     setFilterType(value)
-    const today = new Date()
+    const today = getPakistanTime()
 
     switch (value) {
       case "week":
@@ -72,13 +73,12 @@ export function ProgressCharts({ initialData }: ProgressChartsProps) {
         setEndDate(endOfMonth(today))
         break
       case "custom":
-        // Keep current dates
         break
     }
   }
 
   const chartData = {
-    labels: data.map((d) => format(new Date(d.date), "MMM d")),
+    labels: data.map((d) => formatPakistanDate(new Date(d.date), "MMM d")),
     datasets: [
       {
         label: "Prayers",
@@ -104,7 +104,7 @@ export function ProgressCharts({ initialData }: ProgressChartsProps) {
   }
 
   const barData = {
-    labels: data.map((d) => format(new Date(d.date), "MMM d")),
+    labels: data.map((d) => formatPakistanDate(new Date(d.date), "MMM d")),
     datasets: [
       {
         label: "Total Activities",
@@ -118,7 +118,7 @@ export function ProgressCharts({ initialData }: ProgressChartsProps) {
   }
 
   const pointsData = {
-    labels: data.map((d) => format(new Date(d.date), "MMM d")),
+    labels: data.map((d) => formatPakistanDate(new Date(d.date), "MMM d")),
     datasets: [
       {
         label: "Points Earned",
@@ -220,7 +220,7 @@ export function ProgressCharts({ initialData }: ProgressChartsProps) {
                     <PopoverTrigger asChild>
                       <Button variant="outline" className={cn("w-[140px] justify-start text-left font-normal")}>
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {format(startDate, "MMM d")}
+                        {formatPakistanDate(startDate, "MMM d")}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0">
@@ -231,7 +231,7 @@ export function ProgressCharts({ initialData }: ProgressChartsProps) {
                     <PopoverTrigger asChild>
                       <Button variant="outline" className={cn("w-[140px] justify-start text-left font-normal")}>
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {format(endDate, "MMM d")}
+                        {formatPakistanDate(endDate, "MMM d")}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0">

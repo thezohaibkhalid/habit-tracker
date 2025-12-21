@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { getUserByUsername } from "@/lib/db-utils"
 import { getCurrentUser } from "@/lib/auth"
 import { getProgressData, getActivityData } from "@/app/actions/analytics"
-import { format, subDays } from "date-fns"
+import { subDays } from "date-fns"
+import { getPakistanTime, getPakistanDateString } from "@/lib/time-utils"
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ username: string }> }) {
   try {
@@ -30,23 +31,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: "This profile is private" }, { status: 403 })
     }
 
-    // Get progress data
-    // If it's own profile, always show data. Otherwise, respect privacy settings
     let progressData: any[] = []
     if (isOwnProfile || privacySettings.showProgress !== false) {
-      const endDate = format(new Date(), "yyyy-MM-dd")
-      const startDate = format(subDays(new Date(), 30), "yyyy-MM-dd")
+      const endDate = getPakistanDateString()
+      const startDate = getPakistanDateString(subDays(getPakistanTime(), 30))
       progressData = await getProgressData(startDate, endDate, user._id!.toString())
     }
 
-    // Get activity data for heatmap (always show if progress is allowed)
     let activityData: any[] = []
     if (isOwnProfile || privacySettings.showProgress !== false) {
       activityData = await getActivityData(user._id!.toString())
     }
-
-    // Return user data without password
-    // If it's own profile, always show all data. Otherwise, respect privacy settings
     return NextResponse.json({
       _id: user._id!.toString(),
       username: user.username,

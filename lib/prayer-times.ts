@@ -1,4 +1,6 @@
-// Prayer time calculations and management
+import { getPakistanTime } from "./time-utils"
+import { convertTo12Hour } from "./time-utils"
+
 export const PRAYER_NAMES = {
   fajr: "Fajr",
   zuhr: "Zuhr",
@@ -11,29 +13,51 @@ export type PrayerName = keyof typeof PRAYER_NAMES
 
 export const PRAYER_ORDER: PrayerName[] = ["fajr", "zuhr", "asr", "maghrib", "isha"]
 
-// Default prayer times (these would typically come from an API based on location)
+const PRAYER_TIMES_24H: Record<PrayerName, string> = {
+  fajr: "05:30",
+  zuhr: "13:00",
+  asr: "16:30",
+  maghrib: "18:45",
+  isha: "20:15",
+}
+
 export function getDefaultPrayerTimes(): Record<PrayerName, string> {
   return {
-    fajr: "05:30",
-    zuhr: "13:00",
-    asr: "16:30",
-    maghrib: "18:45",
-    isha: "20:15",
+    fajr: convertTo12Hour(PRAYER_TIMES_24H.fajr),
+    zuhr: convertTo12Hour(PRAYER_TIMES_24H.zuhr),
+    asr: convertTo12Hour(PRAYER_TIMES_24H.asr),
+    maghrib: convertTo12Hour(PRAYER_TIMES_24H.maghrib),
+    isha: convertTo12Hour(PRAYER_TIMES_24H.isha),
   }
 }
 
+function convert12HourTo24Hour(time12h: string): string {
+  const [time, period] = time12h.split(" ")
+  const [hours, minutes] = time.split(":")
+  let hour24 = parseInt(hours, 10)
+  
+  if (period === "PM" && hour24 !== 12) {
+    hour24 += 12
+  } else if (period === "AM" && hour24 === 12) {
+    hour24 = 0
+  }
+  
+  return `${String(hour24).padStart(2, "0")}:${minutes}`
+}
+
 export function getCurrentPrayer(prayerTimes: Record<PrayerName, string>): PrayerName | null {
-  const now = new Date()
+  const now = getPakistanTime()
   const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`
 
   for (let i = PRAYER_ORDER.length - 1; i >= 0; i--) {
     const prayer = PRAYER_ORDER[i]
-    if (currentTime >= prayerTimes[prayer]) {
+    const prayerTime24h = convert12HourTo24Hour(prayerTimes[prayer])
+    if (currentTime >= prayerTime24h) {
       return prayer
     }
   }
 
-  return PRAYER_ORDER[PRAYER_ORDER.length - 1] // Default to Isha
+  return PRAYER_ORDER[PRAYER_ORDER.length - 1]
 }
 
 export function getNextPrayer(prayerTimes: Record<PrayerName, string>): PrayerName {

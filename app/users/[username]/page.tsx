@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button"
 import { ProgressCharts } from "@/components/progress-charts"
 import { ActivityHeatmap } from "@/components/activity-heatmap"
 import { Trophy, Flame, TrendingUp, User, ArrowLeft } from "lucide-react"
-import { format } from "date-fns"
 import Link from "next/link"
 import { DashboardHeader } from "@/components/dashboard-header"
+import { formatPakistanDate } from "@/lib/time-utils"
 import type { ProgressDataPoint, ActivityData } from "@/app/actions/analytics"
 
 interface UserProfile {
@@ -138,7 +138,7 @@ function UserProfileContent() {
                     <h1 className="text-2xl font-bold">@{user.username}</h1>
                     <p className="text-muted-foreground">{user.name}</p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Joined {format(new Date(user.createdAt), "MMMM yyyy")}
+                      Joined {formatPakistanDate(new Date(user.createdAt), "MMMM yyyy")}
                     </p>
                   </div>
                 </div>

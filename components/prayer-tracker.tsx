@@ -7,8 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { Check, Circle } from "lucide-react"
 import { togglePrayer } from "@/app/actions/prayers"
 import { PRAYER_NAMES, PRAYER_ORDER, getDefaultPrayerTimes, type PrayerName } from "@/lib/prayer-times"
-import { format } from "date-fns"
 import { useRouter } from "next/navigation"
+import { getPakistanTime, getPakistanDateString, formatPakistanDate } from "@/lib/time-utils"
 
 interface PrayerTrackerProps {
   initialPrayers?: {
@@ -33,13 +33,12 @@ export function PrayerTracker({ initialPrayers }: PrayerTrackerProps) {
   )
   const [loading, setLoading] = useState<string | null>(null)
   const prayerTimes = getDefaultPrayerTimes()
-  const today = format(new Date(), "yyyy-MM-dd")
+  const today = getPakistanDateString()
 
   const completedCount = Object.values(prayers).filter(Boolean).length
   const totalPrayers = PRAYER_ORDER.length
 
   const handleToggle = async (prayerName: PrayerName) => {
-    // Prevent unchecking completed prayers
     if (prayers[prayerName]) {
       alert("Cannot uncheck a completed prayer")
       return
@@ -71,7 +70,7 @@ export function PrayerTracker({ initialPrayers }: PrayerTrackerProps) {
         <div className="flex items-center justify-between">
           <div>
             <CardTitle>Today's Prayers</CardTitle>
-            <CardDescription>{format(new Date(), "EEEE, MMMM d, yyyy")}</CardDescription>
+            <CardDescription>{formatPakistanDate(getPakistanTime(), "EEEE, MMMM d, yyyy")}</CardDescription>
           </div>
           <Badge variant={completedCount === totalPrayers ? "default" : "secondary"} className="text-lg px-3 py-1">
             {completedCount}/{totalPrayers}

@@ -13,7 +13,8 @@ import { ProgressCharts } from "@/components/progress-charts"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Target, Trophy, Flame, TrendingUp } from "lucide-react"
-import { format, startOfWeek, endOfWeek } from "date-fns"
+import { startOfWeek, endOfWeek } from "date-fns"
+import { getPakistanTime, getPakistanDateString } from "@/lib/time-utils"
 
 export default async function DashboardPage() {
   const user = await getCurrentUser()
@@ -22,15 +23,14 @@ export default async function DashboardPage() {
     redirect("/sign-in")
   }
 
-  // Convert MongoDB document to plain object for Client Components
   const userForClient = {
     name: user.name,
     email: user.email,
   }
 
-  const today = format(new Date(), "yyyy-MM-dd")
-  const weekStart = format(startOfWeek(new Date()), "yyyy-MM-dd")
-  const weekEnd = format(endOfWeek(new Date()), "yyyy-MM-dd")
+  const today = getPakistanDateString()
+  const weekStart = getPakistanDateString(startOfWeek(getPakistanTime()))
+  const weekEnd = getPakistanDateString(endOfWeek(getPakistanTime()))
   
   const [todayPrayers, todos, analytics, activityData, progressData] = await Promise.all([
     getPrayersForDate(today),
