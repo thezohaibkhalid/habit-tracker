@@ -2,17 +2,18 @@ import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/lib/auth"
 import { getPrayersForDate } from "@/app/actions/prayers"
 import { getTodos } from "@/app/actions/todos"
-import { getAnalytics, getActivityData } from "@/app/actions/analytics"
+import { getAnalytics, getActivityData, getProgressData } from "@/app/actions/analytics"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { StatCard } from "@/components/stat-card"
 import { ActivityHeatmap } from "@/components/activity-heatmap"
 import { PrayerTracker } from "@/components/prayer-tracker"
 import { TodoList } from "@/components/todo-list"
 import { AnalyticsDashboard } from "@/components/analytics-dashboard"
+import { ProgressCharts } from "@/components/progress-charts"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Target, Trophy, Flame, TrendingUp } from "lucide-react"
-import { format } from "date-fns"
+import { format, startOfWeek, endOfWeek } from "date-fns"
 
 export default async function DashboardPage() {
   const user = await getCurrentUser()
@@ -28,18 +29,22 @@ export default async function DashboardPage() {
   }
 
   const today = format(new Date(), "yyyy-MM-dd")
-  const [todayPrayers, todos, analytics, activityData] = await Promise.all([
+  const weekStart = format(startOfWeek(new Date()), "yyyy-MM-dd")
+  const weekEnd = format(endOfWeek(new Date()), "yyyy-MM-dd")
+  
+  const [todayPrayers, todos, analytics, activityData, progressData] = await Promise.all([
     getPrayersForDate(today),
     getTodos(),
     getAnalytics(),
     getActivityData(),
+    getProgressData(weekStart, weekEnd),
   ])
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <DashboardHeader user={userForClient} />
 
-      <main className="container py-8">
+      <main className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-8">
           {/* Stats Grid */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -103,16 +108,9 @@ export default async function DashboardPage() {
               </div>
             </TabsContent>
 
-            <TabsContent value="analytics">
-              {analytics ? (
-                <AnalyticsDashboard data={analytics} />
-              ) : (
-                <Card>
-                  <CardContent className="py-12 text-center text-muted-foreground">
-                    <p>No analytics data available yet. Start tracking to see your progress!</p>
-                  </CardContent>
-                </Card>
-              )}
+            <TabsContent value="analytics" className="space-y-6">
+              <ProgressCharts initialData={progressData} />
+              {analytics && <AnalyticsDashboard data={analytics} />}
             </TabsContent>
           </Tabs>
         </div>

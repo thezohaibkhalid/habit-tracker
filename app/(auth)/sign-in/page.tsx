@@ -1,11 +1,41 @@
+"use client"
+
+import { useState } from "react"
 import { signIn } from "@/app/actions/auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { AlertCircle } from "lucide-react"
 
 export default function SignInPage() {
+  const router = useRouter()
+  const [error, setError] = useState<string | null>(null)
+  const [needsVerification, setNeedsVerification] = useState(false)
+  const [email, setEmail] = useState("")
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setError(null)
+    setNeedsVerification(false)
+
+    const formData = new FormData(e.currentTarget)
+    const result = await signIn(formData)
+
+    if (result?.error) {
+      if (result.needsVerification && result.email) {
+        setNeedsVerification(true)
+        setEmail(result.email)
+        router.push(`/verify-email?email=${encodeURIComponent(result.email)}`)
+      } else {
+        setError(result.error)
+      }
+    }
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 p-4">
       <Card className="w-full max-w-md">
@@ -20,7 +50,20 @@ export default function SignInPage() {
           <CardDescription>Sign in to your account to continue</CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={signIn} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            {needsVerification && (
+              <Alert className="border-blue-200 bg-blue-50 dark:bg-blue-950 dark:border-blue-800">
+                <AlertDescription>
+                  Please verify your email. A new verification code has been sent to {email}.
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input id="email" name="email" type="email" placeholder="you@example.com" required />

@@ -40,22 +40,38 @@ export function TodoList({ initialTodos }: TodoListProps) {
   const handleToggle = async (todoId: string) => {
     setLoading(todoId)
     try {
-      await toggleTodo(todoId)
-      router.refresh()
+      const result = await toggleTodo(todoId)
+      if (result?.error) {
+        alert(result.error)
+      } else {
+        router.refresh()
+      }
     } catch (error) {
       console.error("Failed to toggle todo:", error)
+      alert("Failed to toggle todo")
     } finally {
       setLoading(null)
     }
   }
 
   const handleDelete = async (todoId: string) => {
+    const todo = initialTodos.find((t) => t._id === todoId)
+    if (todo?.completed) {
+      alert("Cannot delete a completed task")
+      return
+    }
+
     setLoading(todoId)
     try {
-      await deleteTodo(todoId)
-      router.refresh()
+      const result = await deleteTodo(todoId)
+      if (result?.error) {
+        alert(result.error)
+      } else {
+        router.refresh()
+      }
     } catch (error) {
       console.error("Failed to delete todo:", error)
+      alert("Failed to delete todo")
     } finally {
       setLoading(null)
     }
@@ -180,8 +196,7 @@ export function TodoList({ initialTodos }: TodoListProps) {
                   >
                     <Checkbox
                       checked={todo.completed}
-                      onCheckedChange={() => handleToggle(todo._id)}
-                      disabled={loading === todo._id}
+                      disabled={true}
                       className="mt-1"
                     />
                     <div className="flex-1 min-w-0">
@@ -195,15 +210,6 @@ export function TodoList({ initialTodos }: TodoListProps) {
                         <p className="text-sm text-muted-foreground line-through mt-1">{todo.description}</p>
                       )}
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDelete(todo._id)}
-                      disabled={loading === todo._id}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
                   </div>
                 ))}
               </div>

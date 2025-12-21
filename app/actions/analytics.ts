@@ -13,12 +13,17 @@ export interface ActivityData {
   level: 0 | 1 | 2 | 3 | 4
 }
 
-export async function getActivityData(): Promise<ActivityData[]> {
-  const user = await getCurrentUser()
-  if (!user) return []
-
+export async function getActivityData(userIdParam?: string): Promise<ActivityData[]> {
   const db = await getDb()
-  const userId = new ObjectId(user._id)
+  let userId: ObjectId
+
+  if (userIdParam) {
+    userId = new ObjectId(userIdParam)
+  } else {
+    const user = await getCurrentUser()
+    if (!user) return []
+    userId = new ObjectId(user._id)
+  }
 
   // Get prayers for the past year (365 days)
   const oneYearAgo = format(subDays(new Date(), 365), "yyyy-MM-dd")
@@ -59,20 +64,30 @@ export async function getActivityData(): Promise<ActivityData[]> {
     }
   })
 
-  // Convert to array and calculate levels
-  const activityData: ActivityData[] = Array.from(activityMap.entries()).map(([date, count]) => {
-    // Calculate level based on count (similar to GitHub's contribution levels)
+  // Fill all days in the past year and mark as active/inactive
+  const today = new Date()
+  const oneYearAgo = subDays(today, 365)
+  const result: ActivityData[] = []
+  
+  for (let d = new Date(oneYearAgo); d <= today; d.setDate(d.getDate() + 1)) {
+    const dateStr = format(d, "yyyy-MM-dd")
+    const count = activityMap.get(dateStr) || 0
+    
+    // Calculate level based on count
+    // Level 0 = no activity (red), Level 1+ = has activity (green shades)
     let level: 0 | 1 | 2 | 3 | 4 = 0
     if (count > 0) {
-      if (count <= 2) level = 1
-      else if (count <= 4) level = 2
-      else if (count <= 6) level = 3
-      else level = 4
+      // Any activity marks the day as active
+      if (count === 1) level = 1 // 1 activity
+      else if (count <= 3) level = 2 // 2-3 activities
+      else if (count <= 5) level = 3 // 4-5 activities
+      else level = 4 // 6+ activities
     }
-    return { date, count, level }
-  })
+    
+    result.push({ date: dateStr, count, level })
+  }
 
-  return activityData
+  return result
 }
 
 export async function getAnalytics() {
@@ -155,4 +170,91 @@ export async function getAnalytics() {
       total: prayerPoints + todoPoints,
     },
   }
+}
+
+export interface ProgressDataPoint {
+  date: string
+  prayers: number
+  todos: number
+  total: number
+  points: number
+}
+
+export async function getProgressData(startDate: string, endDate: string, userIdParam?: string): Promise<ProgressDataPoint[]> {
+  const db = await getDb()
+  let userId: ObjectId
+
+  if (userIdParam) {
+    userId = new ObjectId(userIdParam)
+  } else {
+    const user = await getCurrentUser()
+    if (!user) return []
+    userId = new ObjectId(user._id)
+  }
+
+  // Get prayers in date range
+  const prayers = await db
+    .collection<Prayer>(collections.prayers)
+    .find({
+      userId,
+      date: { $gte: startDate, $lte: endDate },
+    })
+    .sort({ date: 1 })
+    .toArray()
+
+  // Get completed todos in date range
+  const todos = await db
+    .collection<Todo>(collections.todos)
+    .find({
+      userId,
+      completed: true,
+      completedAt: {
+        $exists: true,
+        $gte: new Date(startDate),
+        $lte: new Date(endDate + "T23:59:59"),
+      },
+    })
+    .toArray()
+
+  // Create a map to aggregate data by date
+  const progressMap = new Map<string, { prayers: number; todos: number; points: number }>()
+
+  // Add prayers
+  prayers.forEach((prayer) => {
+    const date = prayer.date
+    const existing = progressMap.get(date) || { prayers: 0, todos: 0, points: 0 }
+    existing.prayers += prayer.completedCount
+    existing.points += prayer.points
+    progressMap.set(date, existing)
+  })
+
+  // Add todos
+  todos.forEach((todo) => {
+    if (todo.completedAt) {
+      const date = format(new Date(todo.completedAt), "yyyy-MM-dd")
+      const existing = progressMap.get(date) || { prayers: 0, todos: 0, points: 0 }
+      existing.todos += 1
+      existing.points += todo.points
+      progressMap.set(date, existing)
+    }
+  })
+
+  // Convert to array and fill missing dates
+  const result: ProgressDataPoint[] = []
+  const start = new Date(startDate)
+  const end = new Date(endDate)
+  
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const dateStr = format(d, "yyyy-MM-dd")
+    const data = progressMap.get(dateStr) || { prayers: 0, todos: 0, points: 0 }
+    result.push({
+      date: dateStr,
+      prayers: data.prayers,
+      todos: data.todos,
+      total: data.prayers + data.todos,
+      points: data.points,
+    })
+  }
+
+  return result
 }

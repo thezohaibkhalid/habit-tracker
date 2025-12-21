@@ -39,16 +39,27 @@ export function PrayerTracker({ initialPrayers }: PrayerTrackerProps) {
   const totalPrayers = PRAYER_ORDER.length
 
   const handleToggle = async (prayerName: PrayerName) => {
+    // Prevent unchecking completed prayers
+    if (prayers[prayerName]) {
+      alert("Cannot uncheck a completed prayer")
+      return
+    }
+
     setLoading(prayerName)
     try {
-      await togglePrayer(today, prayerName)
-      setPrayers((prev) => ({
-        ...prev,
-        [prayerName]: !prev[prayerName],
-      }))
-      router.refresh()
+      const result = await togglePrayer(today, prayerName)
+      if (result?.error) {
+        alert(result.error)
+      } else {
+        setPrayers((prev) => ({
+          ...prev,
+          [prayerName]: true,
+        }))
+        router.refresh()
+      }
     } catch (error) {
       console.error("Failed to toggle prayer:", error)
+      alert("Failed to toggle prayer")
     } finally {
       setLoading(null)
     }

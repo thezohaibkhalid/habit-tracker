@@ -5,10 +5,18 @@ export interface User {
   email: string
   password: string
   name: string
+  username: string
   createdAt: Date
   totalPoints: number
   currentStreak: number
   longestStreak: number
+  emailVerified: boolean
+  privacySettings?: {
+    showPoints: boolean
+    showStreak: boolean
+    showProgress: boolean
+    showProfile: boolean
+  }
 }
 
 export interface Prayer {
@@ -59,6 +67,15 @@ export interface HabitLog {
 }
 
 export interface PasswordResetOTP {
+  _id?: ObjectId
+  email: string
+  otp: string
+  expiresAt: Date
+  createdAt: Date
+  used: boolean
+}
+
+export interface EmailVerificationOTP {
   _id?: ObjectId
   email: string
   otp: string

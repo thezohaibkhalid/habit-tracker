@@ -63,24 +63,29 @@ export async function toggleTodo(todoId: string) {
 
   if (!todo) throw new Error("Todo not found")
 
-  const newCompleted = !todo.completed
+  // Prevent unchecking completed todos
+  if (todo.completed) {
+    return { error: "Cannot uncheck a completed task" }
+  }
+
+  // Only allow marking as completed
   await db.collection<Todo>(collections.todos).updateOne(
     { _id: new ObjectId(todoId) },
     {
       $set: {
-        completed: newCompleted,
-        completedAt: newCompleted ? new Date() : undefined,
+        completed: true,
+        completedAt: new Date(),
       },
     },
   )
 
   // Update user points
-  const pointsDelta = newCompleted ? todo.points : -todo.points
   await db
     .collection(collections.users)
-    .updateOne({ _id: new ObjectId(user._id) }, { $inc: { totalPoints: pointsDelta } })
+    .updateOne({ _id: new ObjectId(user._id) }, { $inc: { totalPoints: todo.points } })
 
   revalidatePath("/dashboard")
+  return { success: true }
 }
 
 export async function deleteTodo(todoId: string) {
@@ -95,14 +100,13 @@ export async function deleteTodo(todoId: string) {
 
   if (!todo) throw new Error("Todo not found")
 
-  // If todo was completed, remove points
+  // Prevent deletion of completed todos
   if (todo.completed) {
-    await db
-      .collection(collections.users)
-      .updateOne({ _id: new ObjectId(user._id) }, { $inc: { totalPoints: -todo.points } })
+    return { error: "Cannot delete a completed task" }
   }
 
   await db.collection<Todo>(collections.todos).deleteOne({ _id: new ObjectId(todoId) })
 
   revalidatePath("/dashboard")
+  return { success: true }
 }

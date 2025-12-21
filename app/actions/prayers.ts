@@ -28,8 +28,13 @@ export async function togglePrayer(date: string, prayerName: string) {
     isha: false,
   }
 
-  // Toggle the specific prayer
-  prayers[prayerName as keyof typeof prayers] = !prayers[prayerName as keyof typeof prayers]
+  // Prevent unchecking completed prayers - only allow checking
+  if (prayers[prayerName as keyof typeof prayers]) {
+    return { error: "Cannot uncheck a completed prayer" }
+  }
+
+  // Only allow marking as completed
+  prayers[prayerName as keyof typeof prayers] = true
 
   const completedCount = Object.values(prayers).filter(Boolean).length
   const points = completedCount * 10 // 10 points per prayer
@@ -47,10 +52,12 @@ export async function togglePrayer(date: string, prayerName: string) {
     { upsert: true },
   )
 
-  // Update user total points
-  await db.collection(collections.users).updateOne({ _id: userId }, { $inc: { totalPoints: existing ? 0 : points } })
+  // Update user total points (only add points for new prayer, not when updating existing)
+  const pointsToAdd = existing ? 10 : points // 10 points per prayer
+  await db.collection(collections.users).updateOne({ _id: userId }, { $inc: { totalPoints: pointsToAdd } })
 
   revalidatePath("/dashboard")
+  return { success: true }
 }
 
 export async function getPrayersForDate(date: string) {
